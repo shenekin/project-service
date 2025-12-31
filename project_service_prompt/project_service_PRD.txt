@@ -1,0 +1,144 @@
+        Internal User
+              │
+                      ▼
+ ┌─────────────────────────────┐
+ │ View Available Credentials   │
+ │ - Platform filters by user   │
+ │ - Displays Customer Name +   │
+ │   Project Name               │
+ └─────────────┬───────────────┘
+               │
+                        ▼
+ ┌─────────────────────────────┐
+ │ User selects a credential    │
+ │ for a specific customer      │
+ │ project (AK/SK)              │
+ └─────────────┬───────────────┘
+               │
+                        ▼
+ ┌─────────────────────────────┐
+ │ Project-Service provides     │
+ │ credential context           │
+ │ - Customer Name              │
+ │ - Project Name               │
+ │ - Vault path for AK/SK       │
+ │ - Status check (active/disabled) │
+ └─────────────┬───────────────┘
+               │
+                        ▼
+ ┌─────────────────────────────┐
+ │ Business Service uses AK/SK │
+ │ to call third-party vendor  │
+ │ API                          │
+ │ - Internal user never sees SK │
+ └─────────────┬───────────────┘
+               │
+                        ▼
+ ┌─────────────────────────────┐
+ │ Return results to Internal  │
+ │ User                          │
+ │ - Show Customer Name + Project Name │
+ │ - Record audit log            │
+ │   (who used which credential, what actions) │
+ └─────────────────────────────┘
+
+
+
+
+### 1️⃣ Credential Management (AK/SK Registration & Storage)
+
+**Purpose:** Central place to manage all third-party credentials for customers/projects.
+**Functions:**
+
+* Register a new third-party credential (AK/SK) for a customer/project.
+* Record credential metadata:
+  * Customer Name
+  * Project Name
+  * Vendor / Provider (HuaweiCloud,AWS, Aliyun, Azure.)
+  * Associated resource user
+  * Status (active / disabled / deleted)
+* Securely store SK in Vault .
+* Optional: assign friendly labels or tags for easier lookup.
+
+
+### 2️⃣ Credential Selection / Context Retrieval
+
+**Purpose:** Allow internal users or services to safely select credentials for operations.
+
+**Functions:**
+* Show internal users only the credentials they are allowed to access.
+* Display **Customer Name + Project Name** in the UI.
+* Validate credential status (active/disabled).
+* Provide **context for usage**:
+  * Vault path for SK
+  * Associated Customer/Project info
+* Prevent internal users from seeing raw SK.
+
+### 3️⃣ Permission & Access Control
+
+**Purpose:** Ensure security and isolation across users and customers.
+**Functions:**
+
+* Internal users can only select credentials for customers/projects they have permissions for.
+* Access control checks on each usage request:
+  * Customer-level permission
+  * Project-level permission (if multiple projects per customer)
+
+
+### 4️⃣ Audit & Logging
+
+**Purpose:** Keep traceability for compliance and security.
+**Functions:**
+* Record every action involving a credential:
+  * Creation / registration
+  * Selection / use
+  * Status change (disable / delete)
+* Include:
+  * Internal user performing action
+  * Customer + Project Name
+  * Vendor / Provider
+  * Timestamp
+  * Action performed
+* Support reporting for compliance or internal review.
+
+### 5️⃣ Credential Status Management
+
+**Purpose:** Lifecycle management without rotation (third-party AK/SK only).
+**Functions:**
+
+* Activate / disable a credential.
+* Delete a credential when it is no longer used.
+* Prevent usage of disabled/deleted credentials.
+* Optional: flag for “temporary” or “deprecated” credentials.
+
+### 6️⃣ Vendor / Provider Abstraction
+
+**Purpose:** Handle multi-cloud / multi-vendor scenarios uniformly.
+**Functions:**
+
+* Maintain vendor metadata (HuaweiCloud,AWS, Aliyun, Azure.)
+* Map vendor resource user → AK/SK
+* Provide unified interface for internal services to get credentials **without caring about vendor-specific API details**
+
+### 7️⃣ User Interface / Internal UX
+
+**Purpose:** Make selection and management of credentials user-friendly.
+**Functions:**
+
+* List available credentials filtered by permissions.
+* Display readable **Customer Name + Project Name + Vendor**.
+* Allow internal users to select credentials for operations.
+* Show status and usage hints.
+
+### 8️⃣ Optional: Reporting & Monitoring
+
+**Purpose:** Operational oversight.
+**Functions:**
+
+* Show which credentials are active, disabled, or unused.
+* Track usage frequency per credential.
+* Alert for credentials not used for a long time.
+* Generate reports for auditing and governance.
+
+
+

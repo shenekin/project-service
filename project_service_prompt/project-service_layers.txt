@@ -1,0 +1,10 @@
+Project-Service
+├─ Credential Management
+├─ Credential Selection / Context
+├─ Permission & Access Control
+├─ Audit & Logging
+├─ Credential Status Management
+├─ Vendor / Provider Abstraction
+├─ User Interface / UX
+└─ Reporting & Monitoring
+
