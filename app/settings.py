@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     mysql_host: str = os.getenv("MYSQL_HOST", "localhost")
     mysql_port: int = int(os.getenv("MYSQL_PORT", "3306"))
     mysql_user: str = os.getenv("MYSQL_USER", "root")
-    mysql_password: str = os.getenv("MYSQL_PASSWORD", "1qaz@WSX")
+    mysql_password: str = os.getenv("MYSQL_PASSWORD", "")
     mysql_database: str = os.getenv("MYSQL_DATABASE", "project_db")
     mysql_pool_size: int = int(os.getenv("MYSQL_POOL_SIZE", "10"))
     mysql_max_overflow: int = int(os.getenv("MYSQL_MAX_OVERFLOW", "20"))
