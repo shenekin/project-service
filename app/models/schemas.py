@@ -103,6 +103,8 @@ class CredentialCreate(BaseModel):
 
 class CredentialUpdate(BaseModel):
     """Schema for updating a credential"""
+    access_key: Optional[str] = Field(None, description="Access Key (AK)", min_length=1, max_length=255)
+    secret_key: Optional[str] = Field(None, description="Secret Key (SK)", min_length=1)
     resource_user: Optional[str] = Field(None, description="Associated resource user", max_length=255)
     labels: Optional[str] = Field(None, description="Friendly labels or tags", max_length=500)
     status: Optional[str] = Field(None, description="Credential status", pattern="^(active|disabled|deleted)$")
@@ -141,13 +143,13 @@ class CredentialContextResponse(BaseModel):
 
 
 class CredentialListResponse(BaseModel):
-    """Schema for listing credentials"""
+    """Schema for listing credentials (with masked AK)"""
     id: int
     customer_name: str
     project_name: str
     vendor_name: str
     vendor_display_name: str
-    access_key: str
+    access_key: str  # Masked access key (first 4 characters visible)
     resource_user: Optional[str]
     status: str
     labels: Optional[str]

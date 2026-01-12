@@ -110,10 +110,11 @@ python -m app.main
 ## API Endpoints
 
 ### Credentials
-- `POST /api/v1/credentials` - Create credential
-- `GET /api/v1/credentials` - List credentials
-- `GET /api/v1/credentials/context/{credential_id}` - Get credential context
-- `PUT /api/v1/credentials/{credential_id}` - Update credential
+- `POST /api/v1/credentials` - Create credential (AK and SK)
+- `GET /api/v1/credentials` - List credentials (with masked AK)
+- `GET /api/v1/credentials/context/{credential_id}` - Get credential context (without SK)
+- `GET /api/v1/credentials/{credential_id}/api-credentials` - Get credential for API calls (with decrypted SK)
+- `PUT /api/v1/credentials/{credential_id}` - Update credential (supports AK and SK updates)
 - `DELETE /api/v1/credentials/{credential_id}` - Delete credential
 
 ### Customers
@@ -144,6 +145,9 @@ python -m app.main
 - `GET /api/v1/audit/users/{user_id}` - List audit logs by user
 - `GET /api/v1/audit/credentials/{credential_id}` - List audit logs by credential
 
+### Version
+- `GET /api/v1/version` - Get API version information for software iteration
+
 ## Health Checks
 
 - `GET /health` - Health check endpoint
@@ -166,10 +170,12 @@ The service uses MySQL with the following main tables:
 
 ## Security
 
-- Secret Keys (SK) are stored in HashiCorp Vault, never in the database
+- Secret Keys (SK) are encrypted and stored in HashiCorp Vault, never in the database
 - Access Keys (AK) are stored in the database for reference
+- Access Keys are masked in list responses (only first 4 characters visible)
 - All credential operations are logged in audit_logs
 - User permissions are checked before credential access
+- Encryption uses Fernet (symmetric encryption) for SK protection
 
 ## Testing
 

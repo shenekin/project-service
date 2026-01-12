@@ -5,7 +5,7 @@ Application bootstrap and initialization
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.settings import get_settings
-from app.routers import credentials, customers, projects, vendors, permissions, audit
+from app.routers import credentials, customers, projects, vendors, permissions, audit, version
 from app.utils.db_connection import close_db_connection
 
 
@@ -42,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(vendors.router)
     app.include_router(permissions.router)
     app.include_router(audit.router)
+    app.include_router(version.router)
     
     # Startup event
     @app.on_event("startup")

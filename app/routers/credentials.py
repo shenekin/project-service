@@ -179,6 +179,33 @@ async def update_credential(
     )
 
 
+@router.get("/{credential_id}/api-credentials", response_model=dict)
+async def get_credential_for_api_call(
+    credential_id: int,
+    request: Request,
+    user_id: str = Depends(get_user_id)
+):
+    """
+    Get full credential (AK and decrypted SK) for third-party API calls
+    
+    Args:
+        credential_id: Credential ID
+        request: FastAPI request object
+        user_id: User ID from request headers
+        
+    Returns:
+        Dictionary containing access_key and secret_key (decrypted)
+    """
+    ip_address, user_agent = get_client_info(request)
+    service = CredentialService()
+    return await service.get_credential_for_api_call(
+        credential_id=credential_id,
+        user_id=user_id,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+
+
 @router.delete("/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_credential(
     credential_id: int,

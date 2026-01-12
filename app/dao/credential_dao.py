@@ -164,9 +164,23 @@ class CredentialDAO:
                     for row in rows
                 ]
     
-    async def update(self, credential_id: int, resource_user: Optional[str] = None,
+    async def update(self, credential_id: int, access_key: Optional[str] = None,
+                     vault_path: Optional[str] = None, resource_user: Optional[str] = None,
                      labels: Optional[str] = None, status: Optional[str] = None) -> Optional[Credential]:
-        """Update credential"""
+        """
+        Update credential
+        
+        Args:
+            credential_id: Credential ID to update
+            access_key: Optional new access key
+            vault_path: Optional new vault path (when SK is updated)
+            resource_user: Optional resource user
+            labels: Optional labels
+            status: Optional status
+            
+        Returns:
+            Updated credential or None if not found
+        """
         db = await get_db_connection()
         pool = await db.get_pool()
         
@@ -175,6 +189,12 @@ class CredentialDAO:
                 updates = []
                 params = []
                 
+                if access_key is not None:
+                    updates.append("access_key = %s")
+                    params.append(access_key)
+                if vault_path is not None:
+                    updates.append("vault_path = %s")
+                    params.append(vault_path)
                 if resource_user is not None:
                     updates.append("resource_user = %s")
                     params.append(resource_user)

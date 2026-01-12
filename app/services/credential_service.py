@@ -12,6 +12,7 @@ from app.dao.audit_log_dao import AuditLogDAO
 from app.dao.user_permission_dao import UserPermissionDAO
 from app.models.schemas import CredentialCreate, CredentialUpdate, CredentialContextResponse
 from app.utils.vault_util import VaultUtil
+from app.utils.crypto_util import CryptoUtil
 from app.settings import get_settings
 
 
@@ -28,6 +29,7 @@ class CredentialService:
         self.user_permission_dao = UserPermissionDAO()
         self.settings = get_settings()
         self.vault_util = VaultUtil() if self.settings.vault_enabled else None
+        self.crypto_util = CryptoUtil()
     
     async def create_credential(self, credential_data: CredentialCreate, user_id: str,
                                 ip_address: Optional[str] = None,
@@ -76,13 +78,15 @@ class CredentialService:
                 detail=f"Vendor with ID {credential_data.vendor_id} not found"
             )
         
-        # Store SK in Vault
+        # Encrypt and store SK in Vault
         vault_path = None
         if self.vault_util and self.vault_util.is_connected():
             vault_path = f"{self.settings.vault_credential_path}/{credential_data.customer_id}/{credential_data.project_id}/{credential_data.vendor_id}/{credential_data.access_key}"
             try:
+                # Encrypt secret key before storing in Vault
+                encrypted_sk = self.crypto_util.encrypt(credential_data.secret_key)
                 self.vault_util.write_secret(vault_path, {
-                    "secret_key": credential_data.secret_key,
+                    "secret_key": encrypted_sk,  # Store encrypted SK
                     "access_key": credential_data.access_key,
                     "customer_id": credential_data.customer_id,
                     "project_id": credential_data.project_id,
@@ -218,6 +222,94 @@ class CredentialService:
             labels=credential.labels
         )
     
+    async def get_credential_for_api_call(self, credential_id: int, user_id: str,
+                                          ip_address: Optional[str] = None,
+                                          user_agent: Optional[str] = None) -> dict:
+        """
+        Get full credential (AK and decrypted SK) for third-party API calls
+        
+        Args:
+            credential_id: Credential ID
+            user_id: User ID requesting the credential
+            ip_address: IP address of the request
+            user_agent: User agent of the request
+            
+        Returns:
+            Dictionary containing access_key and secret_key (decrypted)
+            
+        Raises:
+            HTTPException: If credential not found, not active, or user doesn't have permission
+        """
+        # Get credential
+        credential = await self.credential_dao.get_by_id(credential_id)
+        if not credential:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Credential with ID {credential_id} not found"
+            )
+        
+        # Check if credential is active
+        if credential.status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Credential is not active (status: {credential.status})"
+            )
+        
+        # Check user permission
+        has_permission = await self.user_permission_dao.check_permission(
+            user_id=user_id,
+            customer_id=credential.customer_id,
+            project_id=credential.project_id
+        )
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User does not have permission to access this credential"
+            )
+        
+        # Retrieve and decrypt SK from Vault
+        secret_key = None
+        if credential.vault_path and self.vault_util and self.vault_util.is_connected():
+            try:
+                vault_data = self.vault_util.read_secret(credential.vault_path)
+                encrypted_sk = vault_data.get("secret_key")
+                if encrypted_sk:
+                    secret_key = self.crypto_util.decrypt(encrypted_sk)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to retrieve secret from Vault: {str(e)}"
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Vault is not available. Cannot retrieve credentials securely."
+            )
+        
+        # Create audit log
+        await self.audit_log_dao.create(
+            user_id=user_id,
+            action="retrieve_credential_for_api",
+            resource_type="credential",
+            resource_id=credential.id,
+            customer_id=credential.customer_id,
+            project_id=credential.project_id,
+            vendor_id=credential.vendor_id,
+            credential_id=credential.id,
+            details=f"User {user_id} retrieved credential for third-party API call",
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
+        return {
+            "credential_id": credential.id,
+            "access_key": credential.access_key,
+            "secret_key": secret_key,
+            "vendor_id": credential.vendor_id,
+            "customer_id": credential.customer_id,
+            "project_id": credential.project_id
+        }
+    
     async def list_credentials(self, user_id: str, customer_id: Optional[int] = None,
                                project_id: Optional[int] = None,
                                page: int = 1, page_size: int = 20) -> dict:
@@ -244,6 +336,11 @@ class CredentialService:
             limit=page_size
         )
         
+        # Mask access keys in list response (show only first 4 characters)
+        for cred in credentials:
+            if "access_key" in cred:
+                cred["access_key"] = self.crypto_util.mask_access_key(cred["access_key"], visible_chars=4)
+        
         # Get total count (simplified - in production, use a separate count query)
         total = len(credentials)  # This is approximate
         
@@ -258,7 +355,22 @@ class CredentialService:
     async def update_credential(self, credential_id: int, credential_data: CredentialUpdate,
                                user_id: str, ip_address: Optional[str] = None,
                                user_agent: Optional[str] = None) -> dict:
-        """Update credential"""
+        """
+        Update credential (supports AK and SK updates)
+        
+        Args:
+            credential_id: Credential ID to update
+            credential_data: Credential update data (may include AK and SK)
+            user_id: User ID performing the action
+            ip_address: IP address of the request
+            user_agent: User agent of the request
+            
+        Returns:
+            Updated credential dictionary
+            
+        Raises:
+            HTTPException: If validation fails or update fails
+        """
         # Get credential
         credential = await self.credential_dao.get_by_id(credential_id)
         if not credential:
@@ -279,9 +391,49 @@ class CredentialService:
                 detail="User does not have permission to update this credential"
             )
         
-        # Update credential
+        # Handle SK update (if provided)
+        new_vault_path = None
+        if credential_data.secret_key:
+            if not self.vault_util or not self.vault_util.is_connected():
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Vault is not available. Cannot update secret key securely."
+                )
+            
+            # Determine new access key (use updated AK if provided, otherwise use existing)
+            new_access_key = credential_data.access_key if credential_data.access_key else credential.access_key
+            
+            # Generate new vault path
+            new_vault_path = f"{self.settings.vault_credential_path}/{credential.customer_id}/{credential.project_id}/{credential.vendor_id}/{new_access_key}"
+            
+            try:
+                # Encrypt secret key before storing in Vault
+                encrypted_sk = self.crypto_util.encrypt(credential_data.secret_key)
+                self.vault_util.write_secret(new_vault_path, {
+                    "secret_key": encrypted_sk,  # Store encrypted SK
+                    "access_key": new_access_key,
+                    "customer_id": credential.customer_id,
+                    "project_id": credential.project_id,
+                    "vendor_id": credential.vendor_id
+                })
+                
+                # Delete old vault path if AK changed
+                if credential_data.access_key and credential.vault_path and credential.vault_path != new_vault_path:
+                    try:
+                        self.vault_util.delete_secret(credential.vault_path)
+                    except Exception:
+                        pass  # Ignore errors when deleting old path
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to update secret in Vault: {str(e)}"
+                )
+        
+        # Update credential in database
         updated = await self.credential_dao.update(
             credential_id=credential_id,
+            access_key=credential_data.access_key,
+            vault_path=new_vault_path if new_vault_path else None,
             resource_user=credential_data.resource_user,
             labels=credential_data.labels,
             status=credential_data.status
@@ -294,6 +446,18 @@ class CredentialService:
             )
         
         # Create audit log
+        update_details = []
+        if credential_data.access_key:
+            update_details.append("access_key")
+        if credential_data.secret_key:
+            update_details.append("secret_key")
+        if credential_data.resource_user is not None:
+            update_details.append("resource_user")
+        if credential_data.labels is not None:
+            update_details.append("labels")
+        if credential_data.status:
+            update_details.append("status")
+        
         await self.audit_log_dao.create(
             user_id=user_id,
             action="update_credential",
@@ -303,7 +467,7 @@ class CredentialService:
             project_id=credential.project_id,
             vendor_id=credential.vendor_id,
             credential_id=credential.id,
-            details=f"Updated credential",
+            details=f"Updated credential fields: {', '.join(update_details) if update_details else 'none'}",
             ip_address=ip_address,
             user_agent=user_agent
         )
