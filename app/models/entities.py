@@ -13,12 +13,18 @@ class Customer:
         self,
         id: int,
         name: str,
+        description: Optional[str] = None,
+        contact_email: Optional[str] = None,
+        contact_phone: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None
     ):
         """Initialize customer entity"""
         self.id = id
         self.name = name
+        self.description = description
+        self.contact_email = contact_email
+        self.contact_phone = contact_phone
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
     
@@ -27,6 +33,9 @@ class Customer:
         return {
             "id": self.id,
             "name": self.name,
+            "description": self.description,
+            "contact_email": self.contact_email,
+            "contact_phone": self.contact_phone,
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }

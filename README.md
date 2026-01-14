@@ -125,9 +125,20 @@ Customer management functions allow you to create, retrieve, update, and delete 
 
 **Create Customer**
 - `POST /api/v1/customers` - Create a new customer
-  - **Request Body**: `{ "name": "Customer Name" }`
-  - **Response**: Customer object with `id`, `name`, `created_at`, `updated_at`
-  - **Note**: Customer name must be unique. Only the customer name is required from the front-end.
+  - **Request Body**: 
+    ```json
+    {
+      "name": "Customer Name",
+      "description": "Optional customer description",
+      "contact_email": "optional@email.com",
+      "contact_phone": "+1234567890"
+    }
+    ```
+  - **Required Fields**: `name` (must be unique, max 255 characters)
+  - **Optional Fields**: `description` (max 1000 characters), `contact_email` (max 255 characters), `contact_phone` (max 50 characters)
+  - **Response**: Customer object with `id`, `name`, `description`, `contact_email`, `contact_phone`, `created_at`, `updated_at`
+  - **Note**: Customer name is required and must be unique. All other fields are optional.
+  - **Empty Value Handling**: Empty strings (`""`) and the literal string `"string"` are automatically converted to `null` (NULL in database). Optional fields can be omitted from the request body entirely.
 
 **List Customers**
 - `GET /api/v1/customers?page=1&page_size=20` - List all customers with pagination
@@ -135,39 +146,112 @@ Customer management functions allow you to create, retrieve, update, and delete 
     - `page` (optional, default: 1) - Page number
     - `page_size` (optional, default: 20) - Number of items per page
   - **Response**: Paginated list with `total`, `page`, `page_size`, `total_pages`, `items`
+  - Each item includes: `id`, `name`, `description`, `contact_email`, `contact_phone`, `created_at`, `updated_at`
 
 **Get Customer**
 - `GET /api/v1/customers/{customer_id}` - Get customer by ID
   - **Path Parameter**: `customer_id` - Customer ID
-  - **Response**: Customer object with `id`, `name`, `created_at`, `updated_at`
+  - **Response**: Customer object with `id`, `name`, `description`, `contact_email`, `contact_phone`, `created_at`, `updated_at`
+  - **Error**: Returns 404 if customer not found
 
 **Update Customer**
-- `PUT /api/v1/customers/{customer_id}` - Update customer name
+- `PUT /api/v1/customers/{customer_id}` - Update customer information
   - **Path Parameter**: `customer_id` - Customer ID
-  - **Request Body**: `{ "name": "Updated Customer Name" }`
-  - **Response**: Updated customer object
-  - **Note**: Only the customer name can be updated.
+  - **Request Body**: 
+    ```json
+    {
+      "name": "Updated Customer Name",
+      "description": "Updated description",
+      "contact_email": "updated@email.com",
+      "contact_phone": "+9876543210"
+    }
+    ```
+  - **All Fields Optional**: You can update any combination of fields (name, description, contact_email, contact_phone)
+  - **Response**: Updated customer object with all fields
+  - **Note**: Only provided fields will be updated. Omitted fields remain unchanged.
+  - **Empty Value Handling**: Empty strings (`""`) and the literal string `"string"` are automatically converted to `null` (NULL in database). To leave a field unchanged, simply omit it from the request body.
 
 **Delete Customer**
 - `DELETE /api/v1/customers/{customer_id}` - Delete customer
   - **Path Parameter**: `customer_id` - Customer ID
   - **Response**: 204 No Content
-  - **Note**: Deleting a customer will cascade delete all associated projects and credentials.
+  - **Warning**: Deleting a customer will cascade delete all associated projects and credentials. This action cannot be undone.
 
 #### Customer Data Model
 
 The customer entity contains the following fields:
-- `id` (int) - Unique customer identifier (auto-generated)
-- `name` (string) - Customer name (required, unique, max 255 characters)
-- `created_at` (datetime) - Timestamp when customer was created
-- `updated_at` (datetime) - Timestamp when customer was last updated
+- `id` (int) - Unique customer identifier (auto-generated, primary key)
+- `name` (string) - Customer name (**required**, unique, max 255 characters)
+- `description` (string, optional, nullable) - Customer description (max 1000 characters). Empty strings are stored as NULL.
+- `contact_email` (string, optional, nullable) - Contact email address (max 255 characters). Empty strings are stored as NULL.
+- `contact_phone` (string, optional, nullable) - Contact phone number (max 50 characters). Empty strings are stored as NULL.
+- `created_at` (datetime) - Timestamp when customer was created (auto-generated)
+- `updated_at` (datetime) - Timestamp when customer was last updated (auto-updated)
+
+**Important Notes:**
+- Optional fields (`description`, `contact_email`, `contact_phone`) will be stored as `NULL` in the database if:
+  - The field is omitted from the request
+  - The field is provided as an empty string (`""`)
+  - The field is provided as the literal string `"string"` (treated as placeholder)
+- This ensures clean data storage and prevents placeholder values from being stored in the database.
 
 #### Customer API Endpoints Summary
-- `POST /api/v1/customers` - Create customer
-- `GET /api/v1/customers` - List customers
-- `GET /api/v1/customers/{customer_id}` - Get customer
-- `PUT /api/v1/customers/{customer_id}` - Update customer
+- `POST /api/v1/customers` - Create customer (name required, other fields optional)
+- `GET /api/v1/customers` - List customers with pagination
+- `GET /api/v1/customers/{customer_id}` - Get customer by ID
+- `PUT /api/v1/customers/{customer_id}` - Update customer (all fields optional)
 - `DELETE /api/v1/customers/{customer_id}` - Delete customer
+
+#### Customer Function Examples
+
+**Example 1: Create customer with only name (minimum required)**
+```bash
+curl -X POST "http://localhost:8000/api/v1/customers" \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: user123" \
+  -d '{"name": "Acme Corporation"}'
+```
+
+**Example 2: Create customer with all fields**
+```bash
+curl -X POST "http://localhost:8000/api/v1/customers" \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: user123" \
+  -d '{
+    "name": "Tech Solutions Inc",
+    "description": "Leading technology solutions provider",
+    "contact_email": "contact@techsolutions.com",
+    "contact_phone": "+1-555-0123"
+  }'
+```
+
+**Example 3: Create customer with empty optional fields (will be stored as NULL)**
+```bash
+curl -X POST "http://localhost:8000/api/v1/customers" \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: user123" \
+  -d '{
+    "name": "Simple Corp",
+    "description": "",
+    "contact_email": "",
+    "contact_phone": ""
+  }'
+```
+Note: Empty strings are automatically converted to NULL in the database.
+
+**Example 4: Update customer description only**
+```bash
+curl -X PUT "http://localhost:8000/api/v1/customers/1" \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: user123" \
+  -d '{"description": "Updated company description"}'
+```
+
+**Example 5: List customers with pagination**
+```bash
+curl -X GET "http://localhost:8000/api/v1/customers?page=1&page_size=10" \
+  -H "X-User-Id: user123"
+```
 
 ### Projects
 - `POST /api/v1/projects` - Create project

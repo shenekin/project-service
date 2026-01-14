@@ -11,12 +11,36 @@ from app.utils.db_connection import get_db_connection
 class CustomerDAO:
     """Data Access Object for Customer operations"""
     
-    async def create(self, name: str) -> Customer:
+    @staticmethod
+    def _normalize_optional_field(value: Optional[str]) -> Optional[str]:
+        """
+        Normalize optional string fields: convert empty strings and 'string' literal to None
+        
+        Args:
+            value: String value to normalize
+            
+        Returns:
+            Normalized value (None if empty or 'string')
+        """
+        if value is None:
+            return None
+        if isinstance(value, str):
+            value = value.strip()
+            if value == '' or value.lower() == 'string':
+                return None
+        return value
+    
+    async def create(self, name: str, description: Optional[str] = None,
+                     contact_email: Optional[str] = None,
+                     contact_phone: Optional[str] = None) -> Customer:
         """
         Create a new customer
         
         Args:
-            name: Customer name
+            name: Customer name (required)
+            description: Customer description (optional)
+            contact_email: Contact email (optional)
+            contact_phone: Contact phone (optional)
             
         Returns:
             Created customer entity
@@ -26,6 +50,11 @@ class CustomerDAO:
         """
         db = await get_db_connection()
         pool = await db.get_pool()
+        
+        # Normalize optional fields to None if empty or 'string'
+        description = self._normalize_optional_field(description)
+        contact_email = self._normalize_optional_field(contact_email)
+        contact_phone = self._normalize_optional_field(contact_phone)
         
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -40,15 +69,16 @@ class CustomerDAO:
                 
                 # Insert new customer
                 await cursor.execute(
-                    "INSERT INTO customers (name) VALUES (%s)",
-                    (name,)
+                    """INSERT INTO customers (name, description, contact_email, contact_phone)
+                       VALUES (%s, %s, %s, %s)""",
+                    (name, description, contact_email, contact_phone)
                 )
                 customer_id = cursor.lastrowid
                 await conn.commit()
                 
                 # Fetch created customer
                 await cursor.execute(
-                    "SELECT id, name, created_at, updated_at FROM customers WHERE id = %s",
+                    "SELECT id, name, description, contact_email, contact_phone, created_at, updated_at FROM customers WHERE id = %s",
                     (customer_id,)
                 )
                 row = await cursor.fetchone()
@@ -56,8 +86,11 @@ class CustomerDAO:
                 return Customer(
                     id=row[0],
                     name=row[1],
-                    created_at=row[2],
-                    updated_at=row[3]
+                    description=row[2],
+                    contact_email=row[3],
+                    contact_phone=row[4],
+                    created_at=row[5],
+                    updated_at=row[6]
                 )
     
     async def get_by_id(self, customer_id: int) -> Optional[Customer]:
@@ -76,7 +109,7 @@ class CustomerDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    "SELECT id, name, created_at, updated_at FROM customers WHERE id = %s",
+                    "SELECT id, name, description, contact_email, contact_phone, created_at, updated_at FROM customers WHERE id = %s",
                     (customer_id,)
                 )
                 row = await cursor.fetchone()
@@ -87,8 +120,11 @@ class CustomerDAO:
                 return Customer(
                     id=row[0],
                     name=row[1],
-                    created_at=row[2],
-                    updated_at=row[3]
+                    description=row[2],
+                    contact_email=row[3],
+                    contact_phone=row[4],
+                    created_at=row[5],
+                    updated_at=row[6]
                 )
     
     async def get_by_name(self, name: str) -> Optional[Customer]:
@@ -107,7 +143,7 @@ class CustomerDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    "SELECT id, name, created_at, updated_at FROM customers WHERE name = %s",
+                    "SELECT id, name, description, contact_email, contact_phone, created_at, updated_at FROM customers WHERE name = %s",
                     (name,)
                 )
                 row = await cursor.fetchone()
@@ -118,8 +154,11 @@ class CustomerDAO:
                 return Customer(
                     id=row[0],
                     name=row[1],
-                    created_at=row[2],
-                    updated_at=row[3]
+                    description=row[2],
+                    contact_email=row[3],
+                    contact_phone=row[4],
+                    created_at=row[5],
+                    updated_at=row[6]
                 )
     
     async def list_all(self, skip: int = 0, limit: int = 100) -> List[Customer]:
@@ -139,7 +178,7 @@ class CustomerDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    """SELECT id, name, created_at, updated_at
+                    """SELECT id, name, description, contact_email, contact_phone, created_at, updated_at
                        FROM customers ORDER BY name LIMIT %s OFFSET %s""",
                     (limit, skip)
                 )
@@ -149,25 +188,44 @@ class CustomerDAO:
                     Customer(
                         id=row[0],
                         name=row[1],
-                        created_at=row[2],
-                        updated_at=row[3]
+                        description=row[2],
+                        contact_email=row[3],
+                        contact_phone=row[4],
+                        created_at=row[5],
+                        updated_at=row[6]
                     )
                     for row in rows
                 ]
     
-    async def update(self, customer_id: int, name: Optional[str] = None) -> Optional[Customer]:
+    async def update(self, customer_id: int, name: Optional[str] = None,
+                     description: Optional[str] = None,
+                     contact_email: Optional[str] = None,
+                     contact_phone: Optional[str] = None) -> Optional[Customer]:
         """
         Update customer
         
         Args:
             customer_id: Customer ID
-            name: Customer name
+            name: Customer name (optional)
+            description: Customer description (optional)
+            contact_email: Contact email (optional)
+            contact_phone: Contact phone (optional)
             
         Returns:
             Updated customer entity or None if not found
         """
         db = await get_db_connection()
         pool = await db.get_pool()
+        
+        # Normalize optional fields to None if empty or 'string'
+        description = self._normalize_optional_field(description)
+        contact_email = self._normalize_optional_field(contact_email)
+        contact_phone = self._normalize_optional_field(contact_phone)
+        # Normalize name but keep it if it's a valid non-empty string
+        if name is not None:
+            name = name.strip()
+            if name == '' or name.lower() == 'string':
+                name = None
         
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
@@ -178,6 +236,15 @@ class CustomerDAO:
                 if name is not None:
                     updates.append("name = %s")
                     params.append(name)
+                if description is not None:
+                    updates.append("description = %s")
+                    params.append(description)
+                if contact_email is not None:
+                    updates.append("contact_email = %s")
+                    params.append(contact_email)
+                if contact_phone is not None:
+                    updates.append("contact_phone = %s")
+                    params.append(contact_phone)
                 
                 if not updates:
                     # No updates, just return existing customer

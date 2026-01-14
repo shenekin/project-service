@@ -11,6 +11,9 @@ USE project_db;
 CREATE TABLE IF NOT EXISTS customers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE COMMENT 'User input name',
+    description TEXT COMMENT 'Customer description (optional)',
+    contact_email VARCHAR(255) COMMENT 'Contact email (optional)',
+    contact_phone VARCHAR(50) COMMENT 'Contact phone (optional)',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name)

@@ -4,23 +4,56 @@ Pydantic schemas for request/response validation
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CustomerCreate(BaseModel):
     """Schema for creating a customer"""
-    name: str = Field(..., description="Customer name", min_length=1, max_length=255)
+    name: str = Field(..., description="Customer name (required)", min_length=1, max_length=255)
+    description: Optional[str] = Field(None, description="Customer description (optional)", max_length=1000)
+    contact_email: Optional[str] = Field(None, description="Contact email (optional)", max_length=255)
+    contact_phone: Optional[str] = Field(None, description="Contact phone (optional)", max_length=50)
+    
+    @field_validator('description', 'contact_email', 'contact_phone', mode='before')
+    @classmethod
+    def normalize_empty_strings(cls, v):
+        """Convert empty strings and 'string' literal to None"""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            if v == '' or v.lower() == 'string':
+                return None
+        return v
 
 
 class CustomerUpdate(BaseModel):
     """Schema for updating a customer"""
-    name: Optional[str] = Field(None, description="Customer name", min_length=1, max_length=255)
+    name: Optional[str] = Field(None, description="Customer name (optional)", min_length=1, max_length=255)
+    description: Optional[str] = Field(None, description="Customer description (optional)", max_length=1000)
+    contact_email: Optional[str] = Field(None, description="Contact email (optional)", max_length=255)
+    contact_phone: Optional[str] = Field(None, description="Contact phone (optional)", max_length=50)
+    
+    @field_validator('name', 'description', 'contact_email', 'contact_phone', mode='before')
+    @classmethod
+    def normalize_empty_strings(cls, v):
+        """Convert empty strings and 'string' literal to None"""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            if v == '' or v.lower() == 'string':
+                return None
+        return v
 
 
 class CustomerResponse(BaseModel):
     """Schema for customer response"""
     id: int
     name: str
+    description: Optional[str]
+    contact_email: Optional[str]
+    contact_phone: Optional[str]
     created_at: datetime
     updated_at: datetime
     

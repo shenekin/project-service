@@ -23,7 +23,10 @@ class CustomerService:
         """Create a new customer"""
         try:
             customer = await self.customer_dao.create(
-                name=customer_data.name
+                name=customer_data.name,
+                description=customer_data.description,
+                contact_email=customer_data.contact_email,
+                contact_phone=customer_data.contact_phone
             )
             
             # Create audit log
@@ -75,7 +78,10 @@ class CustomerService:
         """Update customer"""
         customer = await self.customer_dao.update(
             customer_id=customer_id,
-            name=customer_data.name
+            name=customer_data.name,
+            description=customer_data.description,
+            contact_email=customer_data.contact_email,
+            contact_phone=customer_data.contact_phone
         )
         
         if not customer:
