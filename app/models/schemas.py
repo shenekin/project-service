@@ -10,26 +10,17 @@ from pydantic import BaseModel, Field
 class CustomerCreate(BaseModel):
     """Schema for creating a customer"""
     name: str = Field(..., description="Customer name", min_length=1, max_length=255)
-    description: Optional[str] = Field(None, description="Customer description", max_length=1000)
-    contact_email: Optional[str] = Field(None, description="Contact email", max_length=255)
-    contact_phone: Optional[str] = Field(None, description="Contact phone", max_length=50)
 
 
 class CustomerUpdate(BaseModel):
     """Schema for updating a customer"""
     name: Optional[str] = Field(None, description="Customer name", min_length=1, max_length=255)
-    description: Optional[str] = Field(None, description="Customer description", max_length=1000)
-    contact_email: Optional[str] = Field(None, description="Contact email", max_length=255)
-    contact_phone: Optional[str] = Field(None, description="Contact phone", max_length=50)
 
 
 class CustomerResponse(BaseModel):
     """Schema for customer response"""
     id: int
     name: str
-    description: Optional[str]
-    contact_email: Optional[str]
-    contact_phone: Optional[str]
     created_at: datetime
     updated_at: datetime
     

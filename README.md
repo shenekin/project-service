@@ -118,6 +118,51 @@ python -m app.main
 - `DELETE /api/v1/credentials/{credential_id}` - Delete credential
 
 ### Customers
+
+Customer management functions allow you to create, retrieve, update, and delete customers. Each customer is identified by a unique name.
+
+#### Customer Functions
+
+**Create Customer**
+- `POST /api/v1/customers` - Create a new customer
+  - **Request Body**: `{ "name": "Customer Name" }`
+  - **Response**: Customer object with `id`, `name`, `created_at`, `updated_at`
+  - **Note**: Customer name must be unique. Only the customer name is required from the front-end.
+
+**List Customers**
+- `GET /api/v1/customers?page=1&page_size=20` - List all customers with pagination
+  - **Query Parameters**: 
+    - `page` (optional, default: 1) - Page number
+    - `page_size` (optional, default: 20) - Number of items per page
+  - **Response**: Paginated list with `total`, `page`, `page_size`, `total_pages`, `items`
+
+**Get Customer**
+- `GET /api/v1/customers/{customer_id}` - Get customer by ID
+  - **Path Parameter**: `customer_id` - Customer ID
+  - **Response**: Customer object with `id`, `name`, `created_at`, `updated_at`
+
+**Update Customer**
+- `PUT /api/v1/customers/{customer_id}` - Update customer name
+  - **Path Parameter**: `customer_id` - Customer ID
+  - **Request Body**: `{ "name": "Updated Customer Name" }`
+  - **Response**: Updated customer object
+  - **Note**: Only the customer name can be updated.
+
+**Delete Customer**
+- `DELETE /api/v1/customers/{customer_id}` - Delete customer
+  - **Path Parameter**: `customer_id` - Customer ID
+  - **Response**: 204 No Content
+  - **Note**: Deleting a customer will cascade delete all associated projects and credentials.
+
+#### Customer Data Model
+
+The customer entity contains the following fields:
+- `id` (int) - Unique customer identifier (auto-generated)
+- `name` (string) - Customer name (required, unique, max 255 characters)
+- `created_at` (datetime) - Timestamp when customer was created
+- `updated_at` (datetime) - Timestamp when customer was last updated
+
+#### Customer API Endpoints Summary
 - `POST /api/v1/customers` - Create customer
 - `GET /api/v1/customers` - List customers
 - `GET /api/v1/customers/{customer_id}` - Get customer
