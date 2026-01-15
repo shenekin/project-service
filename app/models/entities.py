@@ -112,7 +112,7 @@ class Credential:
         self,
         id: int,
         customer_id: int,
-        project_id: int,
+        project_id: Optional[int],
         vendor_id: int,
         access_key: str,
         secret_key: Optional[str] = None,

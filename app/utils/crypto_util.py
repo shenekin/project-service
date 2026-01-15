@@ -108,7 +108,7 @@ class CryptoUtil:
         if not access_key:
             return ""
         
-        if len(access_key) <= visible_chars:
+        if len(access_key) <= visible_chars + 1:
             return "*" * len(access_key)
         
         return access_key[:visible_chars] + "*" * (len(access_key) - visible_chars)

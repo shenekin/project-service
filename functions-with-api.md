@@ -14,6 +14,7 @@ The project-service provides credential management functionality for third-party
 - **Vault Integration**: Secret keys are stored in HashiCorp Vault, only paths stored in database
 - **Permission Control**: User-based access control for credential operations
 - **Audit Logging**: All credential operations are logged for audit purposes
+- **Centralized Logging**: Connection, warning, and error logs are centrally configured and redacted
 - **Version API**: API version information for software iteration tracking
 
 ## API Endpoints
@@ -22,12 +23,11 @@ The project-service provides credential management functionality for third-party
 
 #### 1. Create Credential
 - **Endpoint**: `POST /api/v1/credentials`
-- **Description**: Create a new credential with AK and SK
+- **Description**: Create a new credential with AK and SK (project_id is optional)
 - **Request Body**:
   ```json
   {
     "customer_id": 1,
-    "project_id": 1,
     "vendor_id": 1,
     "access_key": "AK_12345",
     "secret_key": "SK_67890",
@@ -44,7 +44,6 @@ The project-service provides credential management functionality for third-party
 - **Description**: List credentials available to the user
 - **Query Parameters**:
   - `customer_id` (optional): Filter by customer ID
-  - `project_id` (optional): Filter by project ID
   - `page` (default: 1): Page number
   - `page_size` (default: 20): Page size
 - **Response**: Paginated list of credentials with masked AK (first 4 characters visible)
@@ -66,8 +65,7 @@ The project-service provides credential management functionality for third-party
     "access_key": "AK_12345",
     "secret_key": "SK_67890",
     "vendor_id": 1,
-    "customer_id": 1,
-    "project_id": 1
+    "customer_id": 1
   }
   ```
 - **Security**: SK is decrypted from Vault, audit log is created
@@ -202,9 +200,9 @@ The project-service provides credential management functionality for third-party
 ### CredentialService
 
 #### `create_credential(credential_data, user_id, ip_address, user_agent)`
-- **Description**: Create a new credential with encrypted SK storage
+- **Description**: Create a new credential with encrypted SK storage (project_id not required)
 - **Process**:
-  1. Validate customer, project, and vendor exist
+  1. Validate customer and vendor exist (project validation runs only when provided)
   2. Encrypt secret key
   3. Store encrypted SK in Vault
   4. Store credential metadata (AK and vault path) in database
@@ -270,6 +268,24 @@ The project-service provides credential management functionality for third-party
 - **Description**: Mask access key to show only first N characters
 - **Returns**: Masked access key (e.g., "AK_1****")
 
+### Logging Utilities
+
+#### `configure_logging(settings)`
+- **Description**: Configure centralized logging based on settings (format, files, rotation)
+- **Behavior**: Sets up connection, warning, and error loggers with redaction filters
+
+#### `get_logger(name)`
+- **Description**: Get a logger with sensitive data redaction enabled
+
+#### `log_connection(message, **context)`
+- **Description**: Log connection-related events with safe context
+
+#### `log_warning(message, **context)`
+- **Description**: Log warnings with safe context
+
+#### `log_error(message, **context)`
+- **Description**: Log errors with safe context
+
 ### VaultUtil
 
 #### `write_secret(path, data)`
@@ -288,7 +304,7 @@ The project-service provides credential management functionality for third-party
 
 ### CredentialDAO
 
-#### `create(customer_id, project_id, vendor_id, access_key, vault_path, ...)`
+#### `create(customer_id, vendor_id, access_key, vault_path, ...)`
 - **Description**: Create credential record in database
 - **Returns**: Credential entity
 
@@ -337,6 +353,14 @@ The project-service provides credential management functionality for third-party
 - `ENCRYPTION_KEY`: Base64-encoded 32-byte encryption key (optional, will generate if not provided)
 - `ENCRYPTION_SALT`: Salt for key derivation (optional)
 - `ENCRYPTION_PASSWORD`: Password for key derivation (optional, for development only)
+- `LOG_LEVEL`: Logging level (INFO, WARNING, ERROR)
+- `LOG_FORMAT`: Log format (json or text)
+- `LOG_DIRECTORY`: Base directory for log files
+- `LOG_ACCESS_FILE`: Connection log file
+- `LOG_ERROR_FILE`: Error log file
+- `LOG_APPLICATION_FILE`: Warning/application log file
+- `LOG_MAX_BYTES`: Max size per log file before rotation
+- `LOG_BACKUP_COUNT`: Number of rotated log files to keep
 - `VAULT_ENABLED`: Enable Vault integration (true/false)
 - `VAULT_ADDR`: Vault server address
 - `VAULT_AUTH_METHOD`: Authentication method (approle/token)
@@ -355,3 +379,12 @@ The project-service provides credential management functionality for third-party
 - Vault integration for secure SK storage
 - Version API endpoint for software iteration tracking
 
+## Project Details (function.md content)
+
+This section consolidates project functions and components for reference:
+
+- **API Layer**: FastAPI routers for credentials, customers, projects, vendors, permissions, audit, and version.
+- **Service Layer**: Business logic for credential management, permissions, audit, customers, projects, and vendors.
+- **DAO Layer**: Database access for credentials, audit logs, customers, projects, vendors, and permissions.
+- **Utilities**: Crypto, Vault integration, environment loading, database connections, and centralized logging.
+- **Security**: Secret handling via Vault + encryption, key masking, and redaction in logs.

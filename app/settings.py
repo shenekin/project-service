@@ -3,7 +3,9 @@ Application settings and configuration management
 """
 
 import os
+from pathlib import Path
 from typing import List, Optional
+from dotenv import dotenv_values
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -47,18 +49,20 @@ class Settings(BaseSettings):
     nacos_service_port: int = int(os.getenv("NACOS_SERVICE_PORT", "8002"))
     nacos_service_ip: str = os.getenv("NACOS_SERVICE_IP", "localhost")
     
-    # Vault Configuration
-    vault_enabled: bool = os.getenv("VAULT_ENABLED", "false").lower() == "true"
-    vault_addr: str = os.getenv("VAULT_ADDR", "http://127.0.0.1:8200")
-    vault_auth_method: str = os.getenv("VAULT_AUTH_METHOD", "approle")
-    vault_role_id: Optional[str] = os.getenv("VAULT_ROLE_ID")
-    vault_secret_id: Optional[str] = os.getenv("VAULT_SECRET_ID")
-    vault_token: Optional[str] = os.getenv("VAULT_TOKEN")
-    vault_timeout: int = int(os.getenv("VAULT_TIMEOUT", "5"))
-    vault_verify: bool = os.getenv("VAULT_VERIFY", "true").lower() == "true"
+    # Vault Configuration (loaded only from .env)
+    vault_enabled: bool = False
+    vault_addr: Optional[str] = None
+    vault_auth_method: Optional[str] = None
+    vault_role_id: Optional[str] = None
+    vault_secret_id: Optional[str] = None
+    vault_token: Optional[str] = None
+    vault_role_id_file: Optional[str] = None
+    vault_secret_id_file: Optional[str] = None
+    vault_timeout: Optional[int] = None
+    vault_verify: Optional[bool] = None
     
-    # Vault Secret Paths
-    vault_credential_path: str = os.getenv("VAULT_CREDENTIAL_PATH", "secret/credentials")
+    # Vault Secret Paths (loaded only from .env)
+    vault_credential_path: Optional[str] = None
     
     # Logging Configuration
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
@@ -104,6 +108,54 @@ class Settings(BaseSettings):
         """Pydantic configuration"""
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
+
+    def __init__(self, **values):
+        super().__init__(**values)
+        self._apply_vault_env()
+
+    def _apply_vault_env(self) -> None:
+        """Load Vault settings strictly from .env"""
+        env_path = Path(__file__).parent.parent / ".env"
+        vault_env = dotenv_values(env_path) if env_path.exists() else {}
+
+        def _clean(value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            value = value.strip()
+            return value if value else None
+
+        def _parse_bool(value: Optional[str], default: Optional[bool] = None) -> Optional[bool]:
+            if value is None:
+                return default
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+            raise ValueError(f"Invalid boolean value for Vault setting: {value}")
+
+        self.vault_enabled = _parse_bool(vault_env.get("VAULT_ENABLED"), default=False)
+        self.vault_addr = _clean(vault_env.get("VAULT_ADDR"))
+        self.vault_auth_method = _clean(vault_env.get("VAULT_AUTH_METHOD"))
+        self.vault_role_id = _clean(vault_env.get("VAULT_ROLE_ID"))
+        self.vault_secret_id = _clean(vault_env.get("VAULT_SECRET_ID"))
+        self.vault_token = _clean(vault_env.get("VAULT_TOKEN"))
+        self.vault_role_id_file = _clean(vault_env.get("VAULT_ROLE_ID_FILE"))
+        self.vault_secret_id_file = _clean(vault_env.get("VAULT_SECRET_ID_FILE"))
+        self.vault_credential_path = _clean(vault_env.get("VAULT_CREDENTIAL_PATH"))
+
+        timeout_value = _clean(vault_env.get("VAULT_TIMEOUT"))
+        if timeout_value is not None:
+            try:
+                self.vault_timeout = int(timeout_value)
+            except ValueError as exc:
+                raise ValueError(f"Invalid VAULT_TIMEOUT in .env: {timeout_value}") from exc
+        else:
+            self.vault_timeout = None
+
+        verify_value = _clean(vault_env.get("VAULT_VERIFY"))
+        self.vault_verify = _parse_bool(verify_value, default=None)
 
 
 @lru_cache()
@@ -155,4 +207,5 @@ def reload_settings(env_name: Optional[str] = None, env_file_path: Optional[str]
         EnvironmentLoader.load_environment(env_name=env_name)
     
     return get_settings(env_name, env_file_path)
+
 

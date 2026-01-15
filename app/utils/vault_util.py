@@ -25,6 +25,20 @@ class VaultUtil:
             vault_auth_method = self.settings.vault_auth_method
             vault_timeout = self.settings.vault_timeout
             vault_verify = self.settings.vault_verify
+
+            missing = []
+            if not vault_addr:
+                missing.append("VAULT_ADDR")
+            if not vault_auth_method:
+                missing.append("VAULT_AUTH_METHOD")
+            if vault_timeout is None:
+                missing.append("VAULT_TIMEOUT")
+            if vault_verify is None:
+                missing.append("VAULT_VERIFY")
+            if missing:
+                raise ValueError(
+                    "Missing Vault configuration in .env: " + ", ".join(missing)
+                )
             
             # Create Vault client with timeout and SSL verification
             self.client = hvac.Client(
@@ -34,26 +48,57 @@ class VaultUtil:
             )
             
             # Authenticate based on method
+            role_id = self.settings.vault_role_id
+            secret_id = self.settings.vault_secret_id
+            vault_token = self.settings.vault_token
+            role_id_file = self.settings.vault_role_id_file
+            secret_id_file = self.settings.vault_secret_id_file
+
+            if not role_id and role_id_file and os.path.exists(role_id_file):
+                try:
+                    with open(role_id_file, "r", encoding="utf-8") as handle:
+                        role_id = handle.read().strip() or None
+                except OSError:
+                    role_id = None
+            if not secret_id and secret_id_file and os.path.exists(secret_id_file):
+                try:
+                    with open(secret_id_file, "r", encoding="utf-8") as handle:
+                        secret_id = handle.read().strip() or None
+                except OSError:
+                    secret_id = None
+
+            if not vault_auth_method:
+                if vault_token:
+                    vault_auth_method = "token"
+                elif role_id and secret_id:
+                    vault_auth_method = "approle"
+                else:
+                    self.client = None
+                    return
+
             if vault_auth_method == "approle":
-                role_id = self.settings.vault_role_id
-                secret_id = self.settings.vault_secret_id
-                
                 if not role_id or not secret_id:
-                    raise ValueError("VAULT_ROLE_ID and VAULT_SECRET_ID must be set for approle authentication")
-                
-                # Authenticate with AppRole
+                    if vault_token:
+                        vault_auth_method = "token"
+                    else:
+                        self.client = None
+                        return
+
+            if vault_auth_method == "token":
+                if not vault_token:
+                    if role_id and secret_id:
+                        vault_auth_method = "approle"
+                    else:
+                        self.client = None
+                        return
+
+            if vault_auth_method == "approle":
                 response = self.client.auth.approle.login(
                     role_id=role_id,
                     secret_id=secret_id
                 )
-                
-                # Set token
                 self.client.token = response['auth']['client_token']
-                
             elif vault_auth_method == "token":
-                vault_token = self.settings.vault_token
-                if not vault_token:
-                    raise ValueError("VAULT_TOKEN must be set for token authentication")
                 self.client.token = vault_token
             
             else:

@@ -5,6 +5,7 @@ Application bootstrap and initialization
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.settings import get_settings
+from app.utils import configure_logging
 from app.routers import credentials, customers, projects, vendors, permissions, audit, version
 from app.utils.db_connection import close_db_connection
 
@@ -17,6 +18,7 @@ def create_app() -> FastAPI:
         Configured FastAPI application
     """
     settings = get_settings()
+    configure_logging(settings)
     
     app = FastAPI(
         title="Project Service",

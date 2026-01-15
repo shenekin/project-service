@@ -12,6 +12,7 @@ from app.dao.audit_log_dao import AuditLogDAO
 from app.dao.user_permission_dao import UserPermissionDAO
 from app.models.schemas import CredentialCreate, CredentialUpdate, CredentialContextResponse
 from app.utils.vault_util import VaultUtil
+from app.utils import log_error
 from app.utils.crypto_util import CryptoUtil
 from app.settings import get_settings
 
@@ -28,6 +29,8 @@ class CredentialService:
         self.audit_log_dao = AuditLogDAO()
         self.user_permission_dao = UserPermissionDAO()
         self.settings = get_settings()
+        if self.settings.vault_enabled and not self.settings.vault_credential_path:
+            raise ValueError("VAULT_CREDENTIAL_PATH must be set in .env when Vault is enabled")
         self.vault_util = VaultUtil() if self.settings.vault_enabled else None
         self.crypto_util = CryptoUtil()
     
@@ -57,18 +60,7 @@ class CredentialService:
                 detail=f"Customer with ID {credential_data.customer_id} not found"
             )
         
-        # Validate project exists and belongs to customer
-        project = await self.project_dao.get_by_id(credential_data.project_id)
-        if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Project with ID {credential_data.project_id} not found"
-            )
-        if project.customer_id != credential_data.customer_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Project {credential_data.project_id} does not belong to customer {credential_data.customer_id}"
-            )
+        project = None
         
         # Validate vendor exists
         vendor = await self.vendor_dao.get_by_id(credential_data.vendor_id)
@@ -81,23 +73,29 @@ class CredentialService:
         # Encrypt and store SK in Vault
         vault_path = None
         if self.vault_util and self.vault_util.is_connected():
-            vault_path = f"{self.settings.vault_credential_path}/{credential_data.customer_id}/{credential_data.project_id}/{credential_data.vendor_id}/{credential_data.access_key}"
+            vault_path = f"{self.settings.vault_credential_path}/{credential_data.customer_id}/no-project/{credential_data.vendor_id}/{credential_data.access_key}"
             try:
                 # Encrypt secret key before storing in Vault
                 encrypted_sk = self.crypto_util.encrypt(credential_data.secret_key)
-                self.vault_util.write_secret(vault_path, {
+                vault_payload = {
                     "secret_key": encrypted_sk,  # Store encrypted SK
                     "access_key": credential_data.access_key,
                     "customer_id": credential_data.customer_id,
-                    "project_id": credential_data.project_id,
                     "vendor_id": credential_data.vendor_id
-                })
+                }
+                self.vault_util.write_secret(vault_path, vault_payload)
             except Exception as e:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to store secret in Vault: {str(e)}"
                 )
         else:
+            log_error(
+                "Vault is not available. Cannot store credentials securely.",
+                action="create_credential",
+                customer_id=credential_data.customer_id,
+                vendor_id=credential_data.vendor_id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Vault is not available. Cannot store credentials securely."
@@ -107,7 +105,6 @@ class CredentialService:
         try:
             credential = await self.credential_dao.create(
                 customer_id=credential_data.customer_id,
-                project_id=credential_data.project_id,
                 vendor_id=credential_data.vendor_id,
                 access_key=credential_data.access_key,
                 vault_path=vault_path,
@@ -126,7 +123,7 @@ class CredentialService:
                 project_id=credential.project_id,
                 vendor_id=credential.vendor_id,
                 credential_id=credential.id,
-                details=f"Created credential for customer {customer.name}, project {project.name}, vendor {vendor.display_name}",
+                details=f"Created credential for customer {customer.name}, project no-project, vendor {vendor.display_name}",
                 ip_address=ip_address,
                 user_agent=user_agent
             )
@@ -185,10 +182,14 @@ class CredentialService:
         
         # Get related entities
         customer = await self.customer_dao.get_by_id(credential.customer_id)
-        project = await self.project_dao.get_by_id(credential.project_id)
         vendor = await self.vendor_dao.get_by_id(credential.vendor_id)
+        project_name = "no-project"
+        if credential.project_id is not None:
+            project = await self.project_dao.get_by_id(credential.project_id)
+            if project:
+                project_name = project.name
         
-        if not customer or not project or not vendor:
+        if not customer or not vendor:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Related entities not found"
@@ -212,7 +213,7 @@ class CredentialService:
         return CredentialContextResponse(
             credential_id=credential.id,
             customer_name=customer.name,
-            project_name=project.name,
+            project_name=project_name,
             vendor_name=vendor.name,
             vendor_display_name=vendor.display_name,
             access_key=credential.access_key,
@@ -404,7 +405,7 @@ class CredentialService:
             new_access_key = credential_data.access_key if credential_data.access_key else credential.access_key
             
             # Generate new vault path
-            new_vault_path = f"{self.settings.vault_credential_path}/{credential.customer_id}/{credential.project_id}/{credential.vendor_id}/{new_access_key}"
+            new_vault_path = f"{self.settings.vault_credential_path}/{credential.customer_id}/no-project/{credential.vendor_id}/{new_access_key}"
             
             try:
                 # Encrypt secret key before storing in Vault
@@ -413,7 +414,6 @@ class CredentialService:
                     "secret_key": encrypted_sk,  # Store encrypted SK
                     "access_key": new_access_key,
                     "customer_id": credential.customer_id,
-                    "project_id": credential.project_id,
                     "vendor_id": credential.vendor_id
                 })
                 

@@ -116,7 +116,6 @@ class VendorResponse(BaseModel):
 class CredentialCreate(BaseModel):
     """Schema for creating a credential"""
     customer_id: int = Field(..., description="Customer ID", gt=0)
-    project_id: int = Field(..., description="Project ID", gt=0)
     vendor_id: int = Field(..., description="Vendor ID", gt=0)
     access_key: str = Field(..., description="Access Key (AK)", min_length=1, max_length=255)
     secret_key: str = Field(..., description="Secret Key (SK)", min_length=1)
@@ -138,7 +137,7 @@ class CredentialResponse(BaseModel):
     """Schema for credential response (without SK)"""
     id: int
     customer_id: int
-    project_id: int
+    project_id: Optional[int]
     vendor_id: int
     access_key: str
     resource_user: Optional[str]

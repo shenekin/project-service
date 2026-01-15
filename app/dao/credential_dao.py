@@ -10,7 +10,7 @@ from app.utils.db_connection import get_db_connection
 class CredentialDAO:
     """Data Access Object for Credential operations"""
     
-    async def create(self, customer_id: int, project_id: int, vendor_id: int,
+    async def create(self, customer_id: int, vendor_id: int,
                      access_key: str, vault_path: Optional[str] = None,
                      resource_user: Optional[str] = None,
                      labels: Optional[str] = None,
@@ -22,15 +22,15 @@ class CredentialDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    """INSERT INTO credentials (customer_id, project_id, vendor_id, access_key, vault_path, resource_user, labels, status)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-                    (customer_id, project_id, vendor_id, access_key, vault_path, resource_user, labels, status)
+                    """INSERT INTO credentials (customer_id, vendor_id, access_key, vault_path, resource_user, labels, status)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (customer_id, vendor_id, access_key, vault_path, resource_user, labels, status)
                 )
                 credential_id = cursor.lastrowid
                 await conn.commit()
                 
                 await cursor.execute(
-                    """SELECT id, customer_id, project_id, vendor_id, access_key, vault_path, resource_user, labels, status, created_at, updated_at
+                    """SELECT id, customer_id, vendor_id, access_key, vault_path, resource_user, labels, status, created_at, updated_at
                        FROM credentials WHERE id = %s""",
                     (credential_id,)
                 )
@@ -39,15 +39,15 @@ class CredentialDAO:
                 return Credential(
                     id=row[0],
                     customer_id=row[1],
-                    project_id=row[2],
-                    vendor_id=row[3],
-                    access_key=row[4],
-                    vault_path=row[5],
-                    resource_user=row[6],
-                    labels=row[7],
-                    status=row[8],
-                    created_at=row[9],
-                    updated_at=row[10]
+                    project_id=None,
+                    vendor_id=row[2],
+                    access_key=row[3],
+                    vault_path=row[4],
+                    resource_user=row[5],
+                    labels=row[6],
+                    status=row[7],
+                    created_at=row[8],
+                    updated_at=row[9]
                 )
     
     async def get_by_id(self, credential_id: int) -> Optional[Credential]:
@@ -58,7 +58,7 @@ class CredentialDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    """SELECT id, customer_id, project_id, vendor_id, access_key, vault_path, resource_user, labels, status, created_at, updated_at
+                    """SELECT id, customer_id, vendor_id, access_key, vault_path, resource_user, labels, status, created_at, updated_at
                        FROM credentials WHERE id = %s""",
                     (credential_id,)
                 )
@@ -70,15 +70,15 @@ class CredentialDAO:
                 return Credential(
                     id=row[0],
                     customer_id=row[1],
-                    project_id=row[2],
-                    vendor_id=row[3],
-                    access_key=row[4],
-                    vault_path=row[5],
-                    resource_user=row[6],
-                    labels=row[7],
-                    status=row[8],
-                    created_at=row[9],
-                    updated_at=row[10]
+                    project_id=None,
+                    vendor_id=row[2],
+                    access_key=row[3],
+                    vault_path=row[4],
+                    resource_user=row[5],
+                    labels=row[6],
+                    status=row[7],
+                    created_at=row[8],
+                    updated_at=row[9]
                 )
     
     async def list_by_user_permissions(self, user_id: str, customer_id: Optional[int] = None,
@@ -97,6 +97,9 @@ class CredentialDAO:
         Returns:
             List of credential dictionaries with customer/project/vendor names
         """
+        if project_id:
+            return []
+
         db = await get_db_connection()
         pool = await db.get_pool()
         
@@ -104,13 +107,12 @@ class CredentialDAO:
             async with conn.cursor() as cursor:
                 # Build query with permission check
                 query = """
-                    SELECT c.id, c.customer_id, c.project_id, c.vendor_id, c.access_key, c.vault_path,
+                    SELECT c.id, c.customer_id, c.vendor_id, c.access_key, c.vault_path,
                            c.resource_user, c.labels, c.status, c.created_at, c.updated_at,
-                           cust.name as customer_name, p.name as project_name,
-                           v.name as vendor_name, v.display_name as vendor_display_name
+                           cust.name as customer_name, 'no-project' as project_name,
+                           v.name as vendor_name, v.name as vendor_display_name
                     FROM credentials c
                     INNER JOIN customers cust ON c.customer_id = cust.id
-                    INNER JOIN projects p ON c.project_id = p.id
                     INNER JOIN vendors v ON c.vendor_id = v.id
                     WHERE c.status != 'deleted'
                 """
@@ -123,7 +125,7 @@ class CredentialDAO:
                             SELECT 1 FROM user_permissions up
                             WHERE up.user_id = %s
                             AND (up.customer_id IS NULL OR up.customer_id = c.customer_id)
-                            AND (up.project_id IS NULL OR up.project_id = c.project_id)
+                            AND up.project_id IS NULL
                         )
                     )
                 """
@@ -133,10 +135,6 @@ class CredentialDAO:
                 if customer_id:
                     query += " AND c.customer_id = %s"
                     params.append(customer_id)
-                if project_id:
-                    query += " AND c.project_id = %s"
-                    params.append(project_id)
-                
                 query += " ORDER BY c.created_at DESC LIMIT %s OFFSET %s"
                 params.extend([limit, skip])
                 
@@ -147,19 +145,19 @@ class CredentialDAO:
                     {
                         "id": row[0],
                         "customer_id": row[1],
-                        "project_id": row[2],
-                        "vendor_id": row[3],
-                        "access_key": row[4],
-                        "vault_path": row[5],
-                        "resource_user": row[6],
-                        "labels": row[7],
-                        "status": row[8],
-                        "created_at": row[9],
-                        "updated_at": row[10],
-                        "customer_name": row[11],
-                        "project_name": row[12],
-                        "vendor_name": row[13],
-                        "vendor_display_name": row[14]
+                        "project_id": None,
+                        "vendor_id": row[2],
+                        "access_key": row[3],
+                        "vault_path": row[4],
+                        "resource_user": row[5],
+                        "labels": row[6],
+                        "status": row[7],
+                        "created_at": row[8],
+                        "updated_at": row[9],
+                        "customer_name": row[10],
+                        "project_name": row[11],
+                        "vendor_name": row[12],
+                        "vendor_display_name": row[13]
                     }
                     for row in rows
                 ]

@@ -5,6 +5,7 @@ Database connection utility for MySQL with asyncmy
 from typing import Optional
 import asyncmy
 from app.settings import get_settings
+from app.utils import log_connection, log_error, log_warning
 
 
 class DatabaseConnection:
@@ -23,16 +24,26 @@ class DatabaseConnection:
             Database connection pool
         """
         if self._pool is None:
-            self._pool = await asyncmy.create_pool(
-                host=self.settings.mysql_host,
-                port=self.settings.mysql_port,
-                user=self.settings.mysql_user,
-                password=self.settings.mysql_password,
-                db=self.settings.mysql_database,
-                minsize=1,
-                maxsize=self.settings.mysql_pool_size,
-                autocommit=True
-            )
+            try:
+                self._pool = await asyncmy.create_pool(
+                    host=self.settings.mysql_host,
+                    port=self.settings.mysql_port,
+                    user=self.settings.mysql_user,
+                    password=self.settings.mysql_password,
+                    db=self.settings.mysql_database,
+                    minsize=1,
+                    maxsize=self.settings.mysql_pool_size,
+                    autocommit=True
+                )
+                log_connection(
+                    "MySQL connection pool created",
+                    host=self.settings.mysql_host,
+                    port=self.settings.mysql_port,
+                    database=self.settings.mysql_database,
+                )
+            except Exception as exc:
+                log_error("Failed to create MySQL connection pool", error=str(exc))
+                raise
         return self._pool
     
     async def get_connection(self):
@@ -51,6 +62,8 @@ class DatabaseConnection:
             self._pool.close()
             await self._pool.wait_closed()
             self._pool = None
+        else:
+            log_warning("Close called but no MySQL pool exists")
     
     async def execute_query(self, query: str, params: Optional[tuple] = None):
         """

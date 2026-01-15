@@ -30,7 +30,7 @@ venv/
 ENV/
 env/
 .venv
-
+./logs
 # IDE
 .vscode/
 .idea/

@@ -18,14 +18,14 @@ class VendorDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    "INSERT INTO vendors (name, display_name, description) VALUES (%s, %s, %s)",
-                    (name, display_name, description)
+                    "INSERT INTO vendors (name) VALUES (%s)",
+                    (name,)
                 )
                 vendor_id = cursor.lastrowid
                 await conn.commit()
                 
                 await cursor.execute(
-                    "SELECT id, name, display_name, description, created_at, updated_at FROM vendors WHERE id = %s",
+                    "SELECT id, name, created_at, updated_at FROM vendors WHERE id = %s",
                     (vendor_id,)
                 )
                 row = await cursor.fetchone()
@@ -33,10 +33,10 @@ class VendorDAO:
                 return Vendor(
                     id=row[0],
                     name=row[1],
-                    display_name=row[2],
-                    description=row[3],
-                    created_at=row[4],
-                    updated_at=row[5]
+                    display_name=display_name or row[1],
+                    description=None,
+                    created_at=row[2],
+                    updated_at=row[3]
                 )
     
     async def get_by_id(self, vendor_id: int) -> Optional[Vendor]:
@@ -47,7 +47,7 @@ class VendorDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    "SELECT id, name, display_name, description, created_at, updated_at FROM vendors WHERE id = %s",
+                    "SELECT id, name, created_at, updated_at FROM vendors WHERE id = %s",
                     (vendor_id,)
                 )
                 row = await cursor.fetchone()
@@ -58,10 +58,10 @@ class VendorDAO:
                 return Vendor(
                     id=row[0],
                     name=row[1],
-                    display_name=row[2],
-                    description=row[3],
-                    created_at=row[4],
-                    updated_at=row[5]
+                    display_name=row[1],
+                    description=None,
+                    created_at=row[2],
+                    updated_at=row[3]
                 )
     
     async def get_by_name(self, name: str) -> Optional[Vendor]:
@@ -72,7 +72,7 @@ class VendorDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    "SELECT id, name, display_name, description, created_at, updated_at FROM vendors WHERE name = %s",
+                    "SELECT id, name, created_at, updated_at FROM vendors WHERE name = %s",
                     (name,)
                 )
                 row = await cursor.fetchone()
@@ -83,10 +83,10 @@ class VendorDAO:
                 return Vendor(
                     id=row[0],
                     name=row[1],
-                    display_name=row[2],
-                    description=row[3],
-                    created_at=row[4],
-                    updated_at=row[5]
+                    display_name=row[1],
+                    description=None,
+                    created_at=row[2],
+                    updated_at=row[3]
                 )
     
     async def list_all(self) -> List[Vendor]:
@@ -97,7 +97,7 @@ class VendorDAO:
         async with pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute(
-                    "SELECT id, name, display_name, description, created_at, updated_at FROM vendors ORDER BY name"
+                    "SELECT id, name, created_at, updated_at FROM vendors ORDER BY name"
                 )
                 rows = await cursor.fetchall()
                 
@@ -105,10 +105,10 @@ class VendorDAO:
                     Vendor(
                         id=row[0],
                         name=row[1],
-                        display_name=row[2],
-                        description=row[3],
-                        created_at=row[4],
-                        updated_at=row[5]
+                        display_name=row[1],
+                        description=None,
+                        created_at=row[2],
+                        updated_at=row[3]
                     )
                     for row in rows
                 ]
@@ -123,13 +123,6 @@ class VendorDAO:
             async with conn.cursor() as cursor:
                 updates = []
                 params = []
-                
-                if display_name is not None:
-                    updates.append("display_name = %s")
-                    params.append(display_name)
-                if description is not None:
-                    updates.append("description = %s")
-                    params.append(description)
                 
                 if not updates:
                     return await self.get_by_id(vendor_id)
