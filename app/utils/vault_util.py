@@ -6,6 +6,7 @@ import os
 from typing import Optional, Dict, Any
 import hvac
 from app.settings import get_settings
+from app.utils import log_warning
 
 
 class VaultUtil:
@@ -26,26 +27,21 @@ class VaultUtil:
             vault_timeout = self.settings.vault_timeout
             vault_verify = self.settings.vault_verify
 
-            missing = []
             if not vault_addr:
-                missing.append("VAULT_ADDR")
-            if not vault_auth_method:
-                missing.append("VAULT_AUTH_METHOD")
-            if vault_timeout is None:
-                missing.append("VAULT_TIMEOUT")
-            if vault_verify is None:
-                missing.append("VAULT_VERIFY")
-            if missing:
-                raise ValueError(
-                    "Missing Vault configuration in .env: " + ", ".join(missing)
-                )
-            
-            # Create Vault client with timeout and SSL verification
-            self.client = hvac.Client(
-                url=vault_addr,
-                timeout=vault_timeout,
-                verify=vault_verify
-            )
+                raise ValueError("Missing Vault configuration in .env: VAULT_ADDR")
+
+            if vault_addr.startswith("http://"):
+                # No TLS on HTTP; SSL verification is not applicable.
+                vault_verify = None
+
+            client_kwargs = {"url": vault_addr}
+            if vault_timeout is not None:
+                client_kwargs["timeout"] = vault_timeout
+            if vault_verify is not None:
+                client_kwargs["verify"] = vault_verify
+
+            # Create Vault client with optional timeout and SSL verification
+            self.client = hvac.Client(**client_kwargs)
             
             # Authenticate based on method
             role_id = self.settings.vault_role_id
@@ -58,13 +54,25 @@ class VaultUtil:
                 try:
                     with open(role_id_file, "r", encoding="utf-8") as handle:
                         role_id = handle.read().strip() or None
-                except OSError:
+                except OSError as exc:
+                    log_warning(
+                        "Unable to read Vault role_id file",
+                        action="vault_connect",
+                        file_path=role_id_file,
+                        error=str(exc),
+                    )
                     role_id = None
             if not secret_id and secret_id_file and os.path.exists(secret_id_file):
                 try:
                     with open(secret_id_file, "r", encoding="utf-8") as handle:
                         secret_id = handle.read().strip() or None
-                except OSError:
+                except OSError as exc:
+                    log_warning(
+                        "Unable to read Vault secret_id file",
+                        action="vault_connect",
+                        file_path=secret_id_file,
+                        error=str(exc),
+                    )
                     secret_id = None
 
             if not vault_auth_method:

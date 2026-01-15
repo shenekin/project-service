@@ -135,17 +135,23 @@ class Settings(BaseSettings):
                 return False
             raise ValueError(f"Invalid boolean value for Vault setting: {value}")
 
-        self.vault_enabled = _parse_bool(vault_env.get("VAULT_ENABLED"), default=False)
-        self.vault_addr = _clean(vault_env.get("VAULT_ADDR"))
-        self.vault_auth_method = _clean(vault_env.get("VAULT_AUTH_METHOD"))
-        self.vault_role_id = _clean(vault_env.get("VAULT_ROLE_ID"))
-        self.vault_secret_id = _clean(vault_env.get("VAULT_SECRET_ID"))
-        self.vault_token = _clean(vault_env.get("VAULT_TOKEN"))
-        self.vault_role_id_file = _clean(vault_env.get("VAULT_ROLE_ID_FILE"))
-        self.vault_secret_id_file = _clean(vault_env.get("VAULT_SECRET_ID_FILE"))
-        self.vault_credential_path = _clean(vault_env.get("VAULT_CREDENTIAL_PATH"))
+        def _get_value(key: str) -> Optional[str]:
+            file_value = vault_env.get(key)
+            if file_value is None or not str(file_value).strip():
+                return _clean(os.getenv(key))
+            return _clean(str(file_value))
 
-        timeout_value = _clean(vault_env.get("VAULT_TIMEOUT"))
+        self.vault_enabled = _parse_bool(_get_value("VAULT_ENABLED"), default=False)
+        self.vault_addr = _get_value("VAULT_ADDR")
+        self.vault_auth_method = _get_value("VAULT_AUTH_METHOD")
+        self.vault_role_id = _get_value("VAULT_ROLE_ID")
+        self.vault_secret_id = _get_value("VAULT_SECRET_ID")
+        self.vault_token = _get_value("VAULT_TOKEN")
+        self.vault_role_id_file = _get_value("VAULT_ROLE_ID_FILE")
+        self.vault_secret_id_file = _get_value("VAULT_SECRET_ID_FILE")
+        self.vault_credential_path = _get_value("VAULT_CREDENTIAL_PATH")
+
+        timeout_value = _get_value("VAULT_TIMEOUT")
         if timeout_value is not None:
             try:
                 self.vault_timeout = int(timeout_value)
@@ -154,7 +160,7 @@ class Settings(BaseSettings):
         else:
             self.vault_timeout = None
 
-        verify_value = _clean(vault_env.get("VAULT_VERIFY"))
+        verify_value = _get_value("VAULT_VERIFY")
         self.vault_verify = _parse_bool(verify_value, default=None)
 
 
